@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisInput } from "./types";
+import { AnalysisInput } from "../types";
 
 const TRADING_SYSTEM_PROMPT = `
 Kamu adalah VELARC QUANTUM (Grok-Personality Mode), sebuah AI penganalisa pasar modal yang sangat cerdas, sangat skeptis, dan punya lidah tajam. Kamu tidak punya waktu untuk teori manajemen risiko ritel yang basi. Kamu hanya peduli pada ALIRAN UANG (FLOW).
@@ -35,7 +35,13 @@ FORMAT KEPUTUSAN (JSON):
 `;
 
 export const analyzeTrade = async (input: AnalysisInput) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("API KEY HILANG! Mohon masukkan API Key di Vercel Settings > Environment Variables > Redeploy.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const prompt = `
     DATA PASAR UNTUK DIBEDAH:
@@ -48,12 +54,12 @@ export const analyzeTrade = async (input: AnalysisInput) => {
     Bongkar datanya. Apakah ini jebakan ritel atau emas murni dari bandar?
   `;
 
+  // Use gemini-2.5-flash for speed and reliability
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: prompt,
     config: {
       systemInstruction: TRADING_SYSTEM_PROMPT,
-      thinkingConfig: { thinkingBudget: 32768 },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -73,6 +79,15 @@ export const analyzeTrade = async (input: AnalysisInput) => {
     }
   });
 
-  const jsonStr = response.text || '{}';
-  return JSON.parse(jsonStr);
+  const jsonStr = response.text;
+  if (!jsonStr) {
+    throw new Error("AI tidak memberikan respon (Empty Response). Coba lagi.");
+  }
+
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("JSON Parse Error:", e);
+    throw new Error("Format jawaban AI rusak. Silakan coba lagi.");
+  }
 };
